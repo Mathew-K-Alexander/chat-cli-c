@@ -55,19 +55,54 @@ ssize_t getline(char **lineptr, size_t *n, FILE *stream) {
 }
 #endif
 
-
 int main() {
+#ifdef _WIN32
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        fprintf(stderr, "WSAStartup failed\n");
+        return 1;
+    }
+#endif
+
     int socketFD = createTCPIpv4Socket();
     struct sockaddr_in* address = createIPv4Address("127.0.0.1", 2000);
 
-    int result = connect(socketFD, (struct sockaddr*)address, sizeof(*address));
-
-    if (result == 0)
-        printf("Connection was successful\n");
-    else {
+    if (connect(socketFD, (struct sockaddr*)address, sizeof(*address)) != 0) {
         perror("Connection failed");
         return 1;
     }
+
+    printf("Connected to server.\n");
+
+    // --- Send password ---
+    char password[128];
+    printf("Enter password to authenticate: ");
+    fgets(password, sizeof(password), stdin);
+    password[strcspn(password, "\n")] = 0; // Remove newline
+
+    send(socketFD, password, strlen(password), 0);
+
+    // --- Wait for auth response ---
+    char response[128];
+    int received = recv(socketFD, response, sizeof(response) - 1, 0);
+    if (received <= 0) {
+        printf("Failed to receive authentication response.\n");
+        return 1;
+    }
+    response[received] = '\0';
+
+    if (strcmp(response, "AUTH_OK") != 0) {
+        printf("Authentication failed: %s\n", response);
+#ifdef _WIN32
+        closesocket(socketFD);
+        WSACleanup();
+#else
+        close(socketFD);
+#endif
+        return 1;
+    }
+
+    printf("Authentication successful.\n");
 
     startListeningAndPrintMessagesOnNewThread(socketFD);
     readConsoleEntriesAndSendToServer(socketFD);
@@ -82,6 +117,7 @@ int main() {
 
     return 0;
 }
+
 
 void readConsoleEntriesAndSendToServer(int socketFD) {
     char* name = NULL;

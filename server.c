@@ -1,3 +1,4 @@
+#define SERVER_PASSWORD "secret123"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,8 +38,32 @@ void startAcceptingIncomingConnections(int serverSocketFD) {
     while (true) {
         struct AcceptedSocket* clientSocket = acceptIncomingConnection(serverSocketFD);
         if (clientSocket && clientSocket->acceptedSuccessfully) {
+            //acceptedSockets[acceptedSocketsCount++] = *clientSocket;
+            //receiveAndPrintIncomingDataOnSeparateThread(clientSocket);
+            char passwordBuffer[128] = {0};
+            int bytesReceived = recv(clientSocket->acceptedSocketFD, passwordBuffer, sizeof(passwordBuffer) - 1, 0);
+            if (bytesReceived <= 0) {
+                closesocket(clientSocket->acceptedSocketFD);
+                free(clientSocket);
+                continue;
+            }
+            passwordBuffer[bytesReceived] = '\0';
+
+            if (strcmp(passwordBuffer, SERVER_PASSWORD) != 0) {
+                const char* msg = "AUTH_FAILED";
+                send(clientSocket->acceptedSocketFD, msg, strlen(msg), 0);
+                closesocket(clientSocket->acceptedSocketFD);
+                free(clientSocket);
+                printf("Client failed authentication.\n");
+                continue;
+            } else {
+                const char* msg = "AUTH_OK";
+                send(clientSocket->acceptedSocketFD, msg, strlen(msg), 0);
+            }
+
             acceptedSockets[acceptedSocketsCount++] = *clientSocket;
             receiveAndPrintIncomingDataOnSeparateThread(clientSocket);
+
         } else {
             perror("Failed to accept connection");
             free(clientSocket);
