@@ -171,7 +171,7 @@ void* listenAndPrint(void* arg) {
 
         if (amountReceived > 0) {
             buffer[amountReceived] = '\0';
-            printf("Response was: %s\n", buffer);
+            printf("%s\n", buffer);
         }
 
         if (amountReceived <= 0)

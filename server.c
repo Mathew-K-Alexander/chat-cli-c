@@ -34,6 +34,9 @@ void sendReceivedMessageToTheOtherClients(char* buffer, int socketFD);
 struct AcceptedSocket acceptedSockets[10];
 int acceptedSocketsCount = 0;
 
+// Add global variable for server password
+static char* serverPassword = NULL;
+
 void startAcceptingIncomingConnections(int serverSocketFD) {
     while (true) {
         struct AcceptedSocket* clientSocket = acceptIncomingConnection(serverSocketFD);
@@ -53,7 +56,7 @@ void startAcceptingIncomingConnections(int serverSocketFD) {
             }
             passwordBuffer[bytesReceived] = '\0';
 
-            if (strcmp(passwordBuffer, SERVER_PASSWORD) != 0) {
+            if (strcmp(passwordBuffer, serverPassword) != 0) {
                 const char* msg = "AUTH_FAILED";
                 send(clientSocket->acceptedSocketFD, msg, strlen(msg), 0);
                 #ifdef _WIN32
@@ -143,7 +146,15 @@ struct AcceptedSocket* acceptIncomingConnection(int serverSocketFD) {
     return acceptedSocket;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        printf("Usage: %s <password>\n", argv[0]);
+        return 1;
+    }
+
+    // Set the global password
+    serverPassword = argv[1];
+
     int serverSocketFD = createTCPIpv4Socket();
     struct sockaddr_in* serverAddress = createIPv4Address("", 2000);
 
