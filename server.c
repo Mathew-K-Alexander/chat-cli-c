@@ -43,7 +43,11 @@ void startAcceptingIncomingConnections(int serverSocketFD) {
             char passwordBuffer[128] = {0};
             int bytesReceived = recv(clientSocket->acceptedSocketFD, passwordBuffer, sizeof(passwordBuffer) - 1, 0);
             if (bytesReceived <= 0) {
-                closesocket(clientSocket->acceptedSocketFD);
+                #ifdef _WIN32
+                    closesocket(clientSocket->acceptedSocketFD);
+                #else
+                    close(clientSocket->acceptedSocketFD);
+                #endif
                 free(clientSocket);
                 continue;
             }
@@ -52,7 +56,11 @@ void startAcceptingIncomingConnections(int serverSocketFD) {
             if (strcmp(passwordBuffer, SERVER_PASSWORD) != 0) {
                 const char* msg = "AUTH_FAILED";
                 send(clientSocket->acceptedSocketFD, msg, strlen(msg), 0);
-                closesocket(clientSocket->acceptedSocketFD);
+                #ifdef _WIN32
+                    closesocket(clientSocket->acceptedSocketFD);
+                #else
+                    close(clientSocket->acceptedSocketFD);
+                #endif
                 free(clientSocket);
                 printf("Client failed authentication.\n");
                 continue;
