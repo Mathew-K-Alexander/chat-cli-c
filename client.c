@@ -1,7 +1,12 @@
+#include <ncurses.h>
+#include <time.h>  
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#define MAX_MESSAGES 100
+#define MAX_LEN 1024
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -14,11 +19,16 @@
 
 #include "socketutil.h"
 
+short client_color = 1; 
+pthread_mutex_t message_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+char messages[MAX_MESSAGES][MAX_LEN];
+int message_count = 0;
+WINDOW *inputwin;
 
-void startListeningAndPrintMessagesOnNewThread(int fd);
+void startListeningAndPrintMessagesOnNewThread(int socketFD, const char* name);
 void* listenAndPrint(void* arg);
-void readConsoleEntriesAndSendToServer(int socketFD);
+void readConsoleEntriesAndSendToServer(int socketFD, const char* name);
 
 #ifdef _WIN32
 #include <stdlib.h>
@@ -104,8 +114,15 @@ int main() {
 
     printf("Authentication successful.\n");
 
-    startListeningAndPrintMessagesOnNewThread(socketFD);
-    readConsoleEntriesAndSendToServer(socketFD);
+    char* name = NULL;
+    size_t nameSize = 0;
+    printf("Please enter your name:\n");
+    ssize_t nameCount = getline(&name, &nameSize, stdin);
+    if (nameCount > 1)
+        name[nameCount - 1] = '\0';
+
+    startListeningAndPrintMessagesOnNewThread(socketFD, name);
+    readConsoleEntriesAndSendToServer(socketFD, name);
 
 #ifdef _WIN32
     closesocket(socketFD);
@@ -114,68 +131,141 @@ int main() {
     close(socketFD);
 #endif
     free(address);
+    free(name);
 
     return 0;
 }
 
 
-void readConsoleEntriesAndSendToServer(int socketFD) {
-    char* name = NULL;
-    size_t nameSize = 0;
-    printf("Please enter your name:\n");
-    ssize_t nameCount = getline(&name, &nameSize, stdin);
-    if (nameCount > 1)
-        name[nameCount - 1] = '\0';
+void draw_messages() {
+    clear();
+    pthread_mutex_lock(&message_mutex);
+    for (int i = 0; i < message_count; i++) {
+        char* colon = strchr(messages[i], ':');
+        if (colon != NULL) {
+            int name_len = colon - messages[i];
+            attron(COLOR_PAIR(client_color));
+            mvprintw(i, 0, "%.*s", name_len, messages[i]); // Name
+            attroff(COLOR_PAIR(client_color));
+            printw("%s", colon); // Message text
+        } else {
+            mvprintw(i, 0, "%s", messages[i]); // Fallback
+        }
+    }
+    pthread_mutex_unlock(&message_mutex);
+    refresh();
+}
 
-    char* line = NULL;
-    size_t lineSize = 0;
-    printf("Type and we will send (type 'exit' to quit):\n");
 
-    char buffer[1024];
+void readConsoleEntriesAndSendToServer(int socketFD, const char* name) {
+    initscr();
+
+    start_color();
+    srand(time(NULL));
+    client_color = 1 + rand() % 6; 
+    init_pair(1, COLOR_RED,     COLOR_BLACK);
+    init_pair(2, COLOR_GREEN,   COLOR_BLACK);
+    init_pair(3, COLOR_YELLOW,  COLOR_BLACK);
+    init_pair(4, COLOR_BLUE,    COLOR_BLACK);
+    init_pair(5, COLOR_MAGENTA, COLOR_BLACK);
+    init_pair(6, COLOR_CYAN,    COLOR_BLACK);
+
+    cbreak();
+    noecho();
+    keypad(stdscr, TRUE);     
+    curs_set(1);              
+
+    int row, col;
+    getmaxyx(stdscr, row, col);
+    inputwin = newwin(3, col, row - 3, 0); 
+    box(inputwin, 0, 0);
+    wrefresh(inputwin);
+
+    nodelay(inputwin, TRUE); 
+
+    char input[MAX_LEN];
+    int pos = 0;
+    int ch;
+
+    input[0] = '\0';
 
     while (1) {
-        ssize_t charCount = getline(&line, &lineSize, stdin);
-        if (charCount > 1) {
-            line[charCount - 1] = '\0';
-        } else {
+        draw_messages();
+
+        // Redraw input line
+        mvwprintw(inputwin, 1, 1, "You: %s", input);
+        wclrtoeol(inputwin);
+        wrefresh(inputwin);
+
+        ch = wgetch(inputwin);
+
+        if (ch == ERR) {
+            // No key pressed yet
+            napms(50); // Sleep briefly to reduce CPU usage
             continue;
         }
 
-        if (strcmp(line, "exit") == 0)
-            break;
+        if (ch == '\n') {
+            input[pos] = '\0';
 
-        snprintf(buffer, sizeof(buffer), "%s: %s", name, line);
-        send(socketFD, buffer, strlen(buffer), 0);
+            if (strcmp(input, "exit") == 0)
+                break;
+
+            char buffer[MAX_LEN];
+            snprintf(buffer, sizeof(buffer), "%.100s: %.900s", name, input);
+            send(socketFD, buffer, strlen(buffer), 0);
+
+            pthread_mutex_lock(&message_mutex);
+            snprintf(messages[message_count++ % MAX_MESSAGES], MAX_LEN, "You: %.1000s", input);
+            pthread_mutex_unlock(&message_mutex);
+
+            input[0] = '\0';
+            pos = 0;
+        } else if (ch == KEY_BACKSPACE || ch == 127) {
+            if (pos > 0) {
+                pos--;
+                input[pos] = '\0';
+            }
+        } else if (ch >= 32 && ch <= 126 && pos < MAX_LEN - 1) {
+            input[pos++] = ch;
+            input[pos] = '\0';
+        }
     }
 
-    free(name);
-    free(line);
+    endwin();
 }
 
-void startListeningAndPrintMessagesOnNewThread(int socketFD) {
+void startListeningAndPrintMessagesOnNewThread(int socketFD, const char* name) {
     pthread_t id;
-    int* socketFDPtr = malloc(sizeof(int));
-    *socketFDPtr = socketFD;
-    pthread_create(&id, NULL, listenAndPrint, socketFDPtr);
+    struct ListenArgs {
+        int socketFD;
+        char name[128];
+    };
+    struct ListenArgs* args = malloc(sizeof(struct ListenArgs));
+    args->socketFD = socketFD;
+    strncpy(args->name, name, sizeof(args->name));
+    pthread_create(&id, NULL, listenAndPrint, args);
     pthread_detach(id);
 }
 
 void* listenAndPrint(void* arg) {
-    int socketFD = *(int*)arg;
+    struct ListenArgs {
+        int socketFD;
+        char name[128];
+    };
+    struct ListenArgs* args = (struct ListenArgs*)arg;
+    int socketFD = args->socketFD;
     free(arg);
-
     char buffer[1024];
 
     while (1) {
         int amountReceived = recv(socketFD, buffer, sizeof(buffer) - 1, 0);
-
         if (amountReceived > 0) {
             buffer[amountReceived] = '\0';
-            printf("%s\n", buffer);
-        }
-
-        if (amountReceived <= 0)
-            break;
+            pthread_mutex_lock(&message_mutex);
+            snprintf(messages[message_count++ % MAX_MESSAGES], MAX_LEN, "%s", buffer);
+            pthread_mutex_unlock(&message_mutex);
+        } else break;
     }
 
 #ifdef _WIN32
@@ -185,3 +275,4 @@ void* listenAndPrint(void* arg) {
 #endif
     return NULL;
 }
+

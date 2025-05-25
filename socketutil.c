@@ -5,7 +5,13 @@ int createTCPIpv4Socket() {
     WSADATA wsaData;
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 #endif
-    return socket(AF_INET, SOCK_STREAM, 0);
+    int socketFD = socket(AF_INET, SOCK_STREAM, 0);
+
+    // Allow address reuse (needed to fix "Address already in use")
+    int opt = 1;
+    setsockopt(socketFD, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    return socketFD;
 }
 
 struct sockaddr_in* createIPv4Address(const char* ip, int port) {

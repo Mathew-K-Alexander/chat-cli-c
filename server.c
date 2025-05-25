@@ -152,7 +152,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Set the global password
     serverPassword = argv[1];
 
     int serverSocketFD = createTCPIpv4Socket();
