@@ -13,8 +13,12 @@ Currenly works in Linux-based systems and WSL.
 </br>
   
 #### To run the executable run:
-  1. In a new window, cd to directory and run: $ ./server
+  1. In a new window, cd to directory and run: $ ./server <custom-password>
+  > Note: Replace <custom-password> with your desired password (don’t include the angle brackets).
   2. In another window, cd to directory and run: $ ./client
+</br>
+
+#### One can create multiple clients that can connect to the server
 </br>
 
 ![WhatsApp Image 2025-05-25 at 12 08 06 PM](https://github.com/user-attachments/assets/7e1622bd-6b87-4c0d-b04d-18c082ae9ffe)
