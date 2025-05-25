@@ -30,6 +30,14 @@ void startListeningAndPrintMessagesOnNewThread(int socketFD, const char* name);
 void* listenAndPrint(void* arg);
 void readConsoleEntriesAndSendToServer(int socketFD, const char* name);
 
+short get_color_for_name(const char* name) {
+    unsigned int hash = 0;
+    while (*name) {
+        hash = (hash * 31 + *name++) % 1000;
+    }
+    return 1 + (hash % 6); 
+}
+
 #ifdef _WIN32
 #include <stdlib.h>
 #include <stdio.h>
@@ -144,9 +152,18 @@ void draw_messages() {
         char* colon = strchr(messages[i], ':');
         if (colon != NULL) {
             int name_len = colon - messages[i];
-            attron(COLOR_PAIR(client_color));
-            mvprintw(i, 0, "%.*s", name_len, messages[i]); // Name
-            attroff(COLOR_PAIR(client_color));
+
+            // Get username prefix (e.g., "mat", "diya")
+            char username[128];
+            strncpy(username, messages[i], name_len);
+            username[name_len] = '\0';
+
+            short color = get_color_for_name(username);
+
+            attron(COLOR_PAIR(color));
+            mvprintw(i, 0, "%.*s", name_len, messages[i]); // Username
+            attroff(COLOR_PAIR(color));
+
             printw("%s", colon); // Message text
         } else {
             mvprintw(i, 0, "%s", messages[i]); // Fallback
@@ -157,12 +174,11 @@ void draw_messages() {
 }
 
 
+
 void readConsoleEntriesAndSendToServer(int socketFD, const char* name) {
     initscr();
 
-    start_color();
-    srand(time(NULL));
-    client_color = 1 + rand() % 6; 
+    start_color(); 
     init_pair(1, COLOR_RED,     COLOR_BLACK);
     init_pair(2, COLOR_GREEN,   COLOR_BLACK);
     init_pair(3, COLOR_YELLOW,  COLOR_BLACK);
