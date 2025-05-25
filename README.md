@@ -2,15 +2,14 @@
 
 Currenly works in Linux-based systems and WSL.
 
-* #### Please do the following install:
-$ sudo apt-get install libncurses-dev
+#### Please do the following install:
+- $ sudo apt-get install libncurses-dev
 
 
-* #### To create server and client executables run the following commands:
+#### To create server and client executables run the following commands:
+- $ gcc client.c socketutil.c -o client -lncurses -lpthread
 
-$ gcc client.c socketutil.c -o client -lncurses -lpthread
-
-$ gcc server.c  socketutil.c -o server -lpthread
+- $ gcc server.c  socketutil.c -o server -lpthread
 
 *To run the executable run:
 &ensp* 1. In a new window, cd to directory and run: ./server
