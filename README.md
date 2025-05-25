@@ -14,7 +14,7 @@ Currenly works in Linux-based systems and WSL.
   
 #### To run the executable run:
   1. In a new window, cd to directory and run: $ ./server `<custom-password>`
-  > Note: Replace <custom-password> with your desired password (don’t include the angle brackets).
+  > Note: Replace `<custom-password>` with your desired password (don’t include the angle brackets).
   2. In another window, cd to directory and run: $ ./client
 </br>
 
