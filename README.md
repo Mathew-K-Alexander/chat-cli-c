@@ -3,7 +3,7 @@
 Currenly works in Linux-based systems and WSL.
 
 #### Please do the following install:
-- $ sudo apt-get install libncurses-dev </br>
+- $ sudo apt-get install libncurses-dev</br>
 
 #### To create server and client executables run the following commands:
 - $ gcc client.c socketutil.c -o client -lncurses -lpthread
